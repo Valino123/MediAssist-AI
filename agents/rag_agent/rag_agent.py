@@ -6,7 +6,9 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from config import config, logger
 from .document_processor import document_processor
-from .vector_store import get_global_vector_store 
+from .vector_store import get_global_vector_store
+from .query_expander import query_expander
+from .cross_encoder_reranker import cross_encoder_reranker 
 
 class RAGAgent:
     """Retrieval-Augmented Generation agent"""
@@ -36,19 +38,92 @@ class RAGAgent:
 
         logger.info("RAGAgent initialized")
 
-    def retrieve_relevant_documents(self, query: str) -> List[Dict[str, Any]]:
+    def retrieve_relevant_documents(self, query: str, use_hybrid: bool = None, use_query_expansion: bool = None, use_reranking: bool = None) -> List[Dict[str, Any]]:
         try:
-            """Retrieve relevant documents for a query"""
+            """Retrieve relevant documents for a query using hybrid search with optional query expansion and cross-encoder reranking"""
             vs = get_global_vector_store()
-            results = vs.search_similar(query, config.MAX_RETRIEVAL_DOCS)
+            
+            # Use config settings if not specified
+            if use_hybrid is None:
+                use_hybrid = config.ENABLE_HYBRID_RETRIEVAL
+            if use_query_expansion is None:
+                use_query_expansion = config.ENABLE_QUERY_EXPANSION
+            if use_reranking is None:
+                use_reranking = config.ENABLE_CROSS_ENCODER_RERANKING
+            
+            # Step 1: Query Expansion (if enabled)
+            search_query = query
+            if use_query_expansion:
+                try:
+                    expanded_query = query_expander.expand_query(query)
+                    if expanded_query and expanded_query != query:
+                        search_query = expanded_query
+                        logger.info(f"Query expanded: '{query}' → '{expanded_query}'")
+                    else:
+                        logger.info(f"Query expansion returned original query: '{query}'")
+                except Exception as e:
+                    logger.warning(f"Query expansion failed, using original query: {str(e)}")
+                    search_query = query
+            
+            # Step 2: Initial Document Retrieval (get more documents for reranking)
+            retrieval_limit = config.RERANK_TOP_K if use_reranking else config.MAX_RETRIEVAL_DOCS
+            
+            if use_hybrid:
+                # Use hybrid search (dense + BM25)
+                results = vs.hybrid_search(search_query, retrieval_limit, alpha=config.HYBRID_ALPHA)
+                # For hybrid search, use combined_score for filtering
+                filtered_results = [
+                    result for result in results if result.get("combined_score", result.get("score", 0)) > config.RAG_CONFIDENCE_THRESHOLD
+                ]
+                retrieval_method = "hybrid"
+                logger.info(f"Retrieved {len(filtered_results)} relevant documents using hybrid search (alpha={config.HYBRID_ALPHA})")
+            else:
+                # Use dense search only (fallback)
+                results = vs.search_similar(search_query, retrieval_limit)
+                filtered_results = [
+                    result for result in results if result["score"] > config.RAG_CONFIDENCE_THRESHOLD
+                ]
+                retrieval_method = "dense"
+                logger.info(f"Retrieved {len(filtered_results)} relevant documents using dense search")
 
-            filtered_results = [
-                result for result in results if result["score"] > config.RAG_CONFIDENCE_THRESHOLD
-            ]
+            # Add metadata about query expansion
+            for result in filtered_results:
+                result["original_query"] = query
+                result["search_query"] = search_query
+                result["query_expanded"] = use_query_expansion and search_query != query
+                result["retrieval_method"] = retrieval_method
 
-            logger.info(f"Retrieved {len(filtered_results)} relevant documents")
-
-            return filtered_results
+            # Step 3: Cross-Encoder Reranking (if enabled)
+            if use_reranking and filtered_results:
+                try:
+                    logger.info(f"Applying cross-encoder reranking to {len(filtered_results)} documents")
+                    reranked_results = cross_encoder_reranker.rerank(query, filtered_results, top_k=config.RERANK_TOP_K)
+                    
+                    # Limit to final number of documents
+                    final_results = reranked_results[:config.MAX_RETRIEVAL_DOCS]
+                    
+                    # Add reranking metadata
+                    for result in final_results:
+                        result["reranked"] = True
+                        result["reranking_method"] = "cross_encoder"
+                    
+                    logger.info(f"Cross-encoder reranking completed. Final results: {len(final_results)}")
+                    return final_results
+                    
+                except Exception as e:
+                    logger.warning(f"Cross-encoder reranking failed, using original results: {str(e)}")
+                    # Add reranking failure metadata
+                    for result in filtered_results[:config.MAX_RETRIEVAL_DOCS]:
+                        result["reranked"] = False
+                        result["reranking_method"] = "none"
+                    return filtered_results[:config.MAX_RETRIEVAL_DOCS]
+            else:
+                # No reranking, just limit results
+                final_results = filtered_results[:config.MAX_RETRIEVAL_DOCS]
+                for result in final_results:
+                    result["reranked"] = False
+                    result["reranking_method"] = "none"
+                return final_results
 
         except Exception as e:
             logger.error(f"Error retrieving documents: {str(e)}")
@@ -60,8 +135,30 @@ class RAGAgent:
             return "No relevant information found in the knowledge base."
         
         context_parts = []
+        
+        # Add query expansion info if available
+        if documents and documents[0].get("query_expanded"):
+            original_query = documents[0].get("original_query", "")
+            search_query = documents[0].get("search_query", "")
+            if original_query != search_query:
+                context_parts.append(f"Query expanded from '{original_query}' to '{search_query}'\\n")
+        
+        # Add reranking info if available
+        if documents and documents[0].get("reranked"):
+            reranking_method = documents[0].get("reranking_method", "unknown")
+            context_parts.append(f"Documents reranked using {reranking_method}\\n")
+        
         for i, doc in enumerate(documents, 1):
-            context_parts.append(f"Document {i} (Score: {doc['score']:.3f}):\\n{doc['text']}\\n")
+            # Handle different score formats
+            score = doc.get("cross_encoder_score", doc.get("combined_score", doc.get("score", 0)))
+            retrieval_method = doc.get("retrieval_method", "unknown")
+            reranked = doc.get("reranked", False)
+            
+            score_info = f"Score: {score:.3f}"
+            if reranked and "cross_encoder_score" in doc:
+                score_info += f" (Reranked: {doc['cross_encoder_score']:.3f})"
+            
+            context_parts.append(f"Document {i} ({score_info}, Method: {retrieval_method}):\\n{doc['text']}\\n")
         
         return "\\n".join(context_parts)
 
@@ -82,15 +179,33 @@ class RAGAgent:
             logger.error(f"Error generating response: {str(e)}")
             return "I'm sorry, I encountered an error generating a response. Please try again."
 
-    def process_query(self, query: str) -> Dict[str, Any]:
+    def process_query(self, query: str, use_hybrid: bool = None, use_query_expansion: bool = None, use_reranking: bool = None) -> Dict[str, Any]:
         try:
-            documents = self.retrieve_relevant_documents(query)
+            documents = self.retrieve_relevant_documents(query, use_hybrid, use_query_expansion, use_reranking)
 
             context = self.format_context(documents)
 
             response = self.generate_response(query, context)
 
-            confidence = max([doc["score"] for doc in documents]) if documents else 0.0
+            # Handle different score formats (prioritize cross-encoder scores)
+            confidence = 0.0
+            if documents:
+                scores = []
+                for doc in documents:
+                    if "cross_encoder_score" in doc:
+                        scores.append(doc["cross_encoder_score"])
+                    elif "combined_score" in doc:
+                        scores.append(doc["combined_score"])
+                    else:
+                        scores.append(doc.get("score", 0))
+                confidence = max(scores) if scores else 0.0
+
+            # Determine processing metadata
+            query_expanded = False
+            reranked = False
+            if documents:
+                query_expanded = documents[0].get("query_expanded", False)
+                reranked = documents[0].get("reranked", False)
 
             return {
                 "status": "success",
@@ -98,6 +213,10 @@ class RAGAgent:
                 "agent": "RAG_AGENT",
                 "confidence": confidence,
                 "sources": [doc["doc_id"] for doc in documents],
+                "retrieval_method": "hybrid" if (use_hybrid if use_hybrid is not None else config.ENABLE_HYBRID_RETRIEVAL) else "dense",
+                "query_expanded": query_expanded,
+                "reranked": reranked,
+                "reranking_method": documents[0].get("reranking_method", "none") if documents else "none",
                 "timestamp": datetime.now().isoformat()
             }
         
@@ -109,6 +228,10 @@ class RAGAgent:
                 "agent": "RAG_AGENT",
                 "confidence": 0.0,
                 "sources": [],
+                "retrieval_method": "hybrid" if (use_hybrid if use_hybrid is not None else config.ENABLE_HYBRID_RETRIEVAL) else "dense",
+                "query_expanded": False,
+                "reranked": False,
+                "reranking_method": "none",
                 "timestamp": datetime.now().isoformat(),
                 "error": str(e)
             }

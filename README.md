@@ -25,7 +25,7 @@ MediAssist AI is a multi-agent medical assistant system that combines various AI
 ### Medical Image Analysis
 - **Brain Tumor Detection**: Analyzes brain MRI images for tumor classification
 - **Chest X-ray Analysis**: Detects pneumonia, cardiomegaly, and other lung conditions
-- **Skin Lesion Classification**: Identifies various skin conditions and potential malignancies
+- **Skin Cancer Detection**: Analyzes skin cancer stages
 
 ### Safety & Compliance
 - **Input Validation**: Comprehensive input sanitization and validation
@@ -38,9 +38,9 @@ MediAssist AI is a multi-agent medical assistant system that combines various AI
 - **Backend**: FastAPI, Python 3.8+
 - **AI/ML**: 
   - **Qwen model** (Alibaba Cloud) for conversational AI and agent decision making
-  - LangChain for LLM orchestration
+  - LangGraph for LLM orchestration
   - Hugging Face Transformers for medical image analysis
-  - Azure OpenAI for embeddings and chat
+  - Azure OpenAI for embeddings
   - Qdrant for vector storage
 - **Voice Processing**: Azure Cognitive Services
 - **Web Search**: Google Custom Search API, PubMed API
@@ -219,6 +219,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🆘 Support
 
 For support, please open an issue in the GitHub repository or contact the development team.
+
+## 🙏 Acknowledgments
+
+This project is inspired by and builds upon the excellent work from:
+- **[Multi-Agent-Medical-Assistant](https://github.com/souvikmajumder26/Multi-Agent-Medical-Assistant)** by [@souvikmajumder26](https://github.com/souvikmajumder26)
 
 ## 🔄 Version History
 

@@ -53,6 +53,20 @@ class Config:
         self.MAX_RETRIEVAL_DOCS=int(os.getenv("MAX_RETRIEVAL_DOCS", "5"))
         self.RAG_CONFIDENCE_THRESHOLD=float(os.getenv("RAG_CONFIDENCE_THRESHOLD", "0.6"))
         
+        # Hybrid retrieval settings
+        self.ENABLE_HYBRID_RETRIEVAL=os.getenv("ENABLE_HYBRID_RETRIEVAL", "True").lower() == "true"
+        self.HYBRID_ALPHA=float(os.getenv("HYBRID_ALPHA", "0.7"))  # Weight for dense vs BM25 (0.7 = 70% dense, 30% BM25)
+        
+        # Query expansion settings
+        self.ENABLE_QUERY_EXPANSION=os.getenv("ENABLE_QUERY_EXPANSION", "True").lower() == "true"
+        self.QUERY_EXPANSION_TEMPERATURE=float(os.getenv("QUERY_EXPANSION_TEMPERATURE", "0.3"))  # Lower temperature for consistent expansion
+        self.QUERY_EXPANSION_MAX_TOKENS=int(os.getenv("QUERY_EXPANSION_MAX_TOKENS", "200"))  # Shorter response for expansion
+        
+        # Cross-encoder reranking settings
+        self.ENABLE_CROSS_ENCODER_RERANKING=os.getenv("ENABLE_CROSS_ENCODER_RERANKING", "True").lower() == "true"
+        self.CROSS_ENCODER_MODEL=os.getenv("CROSS_ENCODER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")  # Default cross-encoder model
+        self.RERANK_TOP_K=int(os.getenv("RERANK_TOP_K", "20"))  # Number of documents to rerank
+        
         # Multi-Agent settings
         self.AGENT_DECISION_MODEL=os.getenv("AGENT_DECISION_MODEL")
         self.AGENT_DECISION_TEMPERATURE=float(os.getenv("AGENT_DECISION_TEMPERATURE", "0.1"))

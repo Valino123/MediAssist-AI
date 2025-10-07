@@ -12,6 +12,13 @@ import uuid
 
 from config import config, logger
 
+# Import BM25Retriever with error handling
+try:
+    from .bm25_retriever import BM25Retriever
+except ImportError as e:
+    logger.warning(f"BM25Retriever not available: {e}")
+    BM25Retriever = None
+
 class AzureTextEmbeddingModel:
     def __init__(self):
         """Initialize Azure OpenAI text embedding model"""
@@ -79,11 +86,20 @@ class VectorStore:
             # self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
             self.embedding_model = AzureTextEmbeddingModel()
 
+            # Initialize BM25 retriever if available
+            if BM25Retriever is not None:
+                self.bm25_retriever = BM25Retriever()
+                self.document_texts = []  # Store original texts for BM25
+            else:
+                self.bm25_retriever = None
+                self.document_texts = []
+                logger.warning("BM25Retriever not available, hybrid search will use dense search only")
+
             # Create collection if it doesn't exist
             self._create_collection()
             
             self._initialized = True
-            logger.info("VectorStore initialized (singleton)")
+            logger.info("VectorStore initialized (singleton) with hybrid retrieval support")
             
         except Exception as e:
             logger.error(f"Failed to initialize VectorStore: {str(e)}")
@@ -151,7 +167,15 @@ class VectorStore:
                 points=points
             )
 
-            logger.info(f"Added {len(points)} documents to vector store")
+            # Also add to BM25 retriever if available
+            if self.bm25_retriever is not None:
+                self.bm25_retriever.add_documents(documents)
+            
+            # Store texts for hybrid retrieval
+            for doc in documents:
+                self.document_texts.append(doc["text"])
+
+            logger.info(f"Added {len(points)} documents to vector store and BM25 index")
             return True
 
         except Exception as e:
@@ -159,7 +183,7 @@ class VectorStore:
             return False
 
     def search_similar(self, query: str, limit: int = None) -> List[Dict[str, Any]]:
-        """Search for similar documents"""
+        """Search for similar documents using dense embeddings only"""
         if limit is None:
             limit = config.MAX_RETRIEVAL_DOCS 
         
@@ -182,7 +206,8 @@ class VectorStore:
                     "doc_id": result.payload["doc_id"],
                     "chunk_index": result.payload["chunk_index"],
                     "score": result.score,
-                    "metadata": result.payload["metadata"]
+                    "metadata": result.payload["metadata"],
+                    "retrieval_method": "dense"
                 })
                 logger.info(f"Document {result.payload['doc_id']} found with score {result.score}")
             logger.info(f"Found {len(results)} similar documents for query: {query[:50]}...")
@@ -191,6 +216,89 @@ class VectorStore:
         except Exception as e:
             logger.error(f"Error searching vector store: {str(e)}")
             return []
+
+    def hybrid_search(self, query: str, limit: int = None, alpha: float = 0.7) -> List[Dict[str, Any]]:
+        """Hybrid search combining dense and sparse retrieval"""
+        if limit is None:
+            limit = config.MAX_RETRIEVAL_DOCS
+            
+        try:
+            # Dense retrieval
+            dense_results = self.search_similar(query, limit * 2)  # Get more for reranking
+            
+            # BM25 retrieval
+            bm25_results = []
+            if self.bm25_retriever is not None:
+                bm25_results = self.bm25_retriever.search(query, limit * 2)
+            
+            # Combine and rerank results
+            combined_results = self._combine_results(dense_results, bm25_results, alpha)
+            
+            logger.info(f"Hybrid search returned {len(combined_results[:limit])} results (dense: {len(dense_results)}, bm25: {len(bm25_results)})")
+            return combined_results[:limit]
+            
+        except Exception as e:
+            logger.error(f"Error in hybrid search: {str(e)}")
+            # Fallback to dense search only
+            return self.search_similar(query, limit)
+    
+    def _combine_results(self, dense_results: List[Dict], bm25_results: List[Dict], alpha: float) -> List[Dict]:
+        """Combine dense and BM25 results using weighted scoring"""
+        try:
+            # Normalize scores to [0, 1]
+            if dense_results:
+                max_dense = max(r["score"] for r in dense_results)
+                for r in dense_results:
+                    r["normalized_dense_score"] = r["score"] / max_dense if max_dense > 0 else 0
+            
+            if bm25_results:
+                max_bm25 = max(r["score"] for r in bm25_results)
+                for r in bm25_results:
+                    r["normalized_bm25_score"] = r["score"] / max_bm25 if max_bm25 > 0 else 0
+            
+            # Create combined scoring
+            combined = {}
+            
+            # Add dense results
+            for r in dense_results:
+                key = r["text"][:100]  # Use text as key for deduplication
+                combined[key] = {
+                    "text": r["text"],
+                    "doc_id": r.get("doc_id"),
+                    "chunk_index": r.get("chunk_index"),
+                    "metadata": r.get("metadata", {}),
+                    "dense_score": r.get("normalized_dense_score", 0),
+                    "bm25_score": 0,
+                    "combined_score": r.get("normalized_dense_score", 0) * alpha,
+                    "retrieval_method": "hybrid"
+                }
+            
+            # Add/update with BM25 results
+            for r in bm25_results:
+                key = r["text"][:100]
+                if key in combined:
+                    combined[key]["bm25_score"] = r.get("normalized_bm25_score", 0)
+                    combined[key]["combined_score"] += r.get("normalized_bm25_score", 0) * (1 - alpha)
+                else:
+                    combined[key] = {
+                        "text": r["text"],
+                        "doc_id": r.get("doc_id"),
+                        "chunk_index": r.get("chunk_index"),
+                        "metadata": r.get("metadata", {}),
+                        "dense_score": 0,
+                        "bm25_score": r.get("normalized_bm25_score", 0),
+                        "combined_score": r.get("normalized_bm25_score", 0) * (1 - alpha),
+                        "retrieval_method": "hybrid"
+                    }
+            
+            # Sort by combined score
+            sorted_results = sorted(combined.values(), key=lambda x: x["combined_score"], reverse=True)
+            return sorted_results
+            
+        except Exception as e:
+            logger.error(f"Error combining results: {str(e)}")
+            # Return dense results as fallback
+            return dense_results
 
     def get_collection_info(self) -> Dict[str, Any]:
         """Get information about the collection"""
@@ -211,7 +319,13 @@ class VectorStore:
         try:
             self.client.delete_collection(self.collection_name)
             self._create_collection()
-            logger.info("Collection cleared and recreated")
+            
+            # Also clear BM25 index if available
+            if self.bm25_retriever is not None:
+                self.bm25_retriever.clear()
+            self.document_texts = []
+            
+            logger.info("Collection and BM25 index cleared and recreated")
             return True
         except Exception as e:
             logger.error(f"Error clearing collection: {str(e)}")
