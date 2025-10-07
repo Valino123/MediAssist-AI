@@ -21,4 +21,7 @@ uploads/
 models/
 cache/
 
+# Feature guide files
+*_GUIDE.md
+
 
