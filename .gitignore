@@ -21,7 +21,7 @@ uploads/
 models/
 cache/
 
-# Feature guide files
-*_GUIDE.md
+# Feature guide files (commented out to keep documentation in repo)
+# *_GUIDE.md
 
 
