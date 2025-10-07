@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+
+# API keys
+.env
+
+# Unit test / coverage reports
+.cache
+
+# IDEs and editors
+.vscode/
+
+# Logs and databases
+logs/
+data/docs_db/
+parsed_docs/
+qdrant_db/
+
+# App data and artifacts
+uploads/
+models/
+cache/
+
+
