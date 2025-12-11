@@ -157,6 +157,15 @@ The system uses a LangGraph-based workflow to intelligently route queries to spe
 1. `bash backend/scripts/run_prod.sh` (builds Vite and starts uvicorn on :8000)
 2. Open http://localhost:8000
 
+### Docker (local, with externalized Qdrant)
+1. Ensure Docker is running.
+2. `docker-compose up -d` (starts `qdrant` on 6333 and backend on 8000).
+   - Backend env (already wired in compose): `QDRANT_HOST=qdrant`, `QDRANT_PORT=6333`, `QDRANT_USE_SSL=False`, `QDRANT_API_KEY=dev-qdrant-key` (change if you prefer another key; must match Qdrant service).
+   - Backend image tag (compose): `docker-mediassit-v2`
+3. Open http://localhost:8000
+4. Faster builds: BuildKit + cache example  
+   `DOCKER_BUILDKIT=1 docker buildx build --cache-to=type=local,dest=.buildx-cache --cache-from=type=local,src=.buildx-cache -t mediassist-backend -f backend/Dockerfile .`
+
 ## 🎯 Usage
 
 ### Web Interface

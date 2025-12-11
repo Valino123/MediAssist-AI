@@ -79,7 +79,14 @@ class VectorStore:
             
         try:
             # Initialize Qdrant client with connection management
-            self.client = QdrantClient(path=config.VECTOR_DB_PATH)
+            if config.QDRANT_HOST:
+                scheme = "https" if config.QDRANT_USE_SSL else "http"
+                url = f"{scheme}://{config.QDRANT_HOST}:{config.QDRANT_PORT}"
+                self.client = QdrantClient(url=url, api_key=config.QDRANT_API_KEY)
+                logger.info(f"Qdrant client initialized (remote) at {url}")
+            else:
+                self.client = QdrantClient(path=config.VECTOR_DB_PATH)
+                logger.info(f"Qdrant client initialized (local path) at {config.VECTOR_DB_PATH}")
             self.collection_name = "medical_documents"
             
             # Initialize embedding model

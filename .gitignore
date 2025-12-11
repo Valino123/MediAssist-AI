@@ -1,9 +1,12 @@
 # OS/filesystem
 .DS_Store
 Thumbs.db
+tests
 
 # Python
 __pycache__/
+/.pytest_cache/
+/.mypy_cache/
 *.py[cod]
 *.egg-info/
 .venv/
@@ -27,5 +30,13 @@ build/
 coverage/
 *.coverage
 *.log
+npm-debug.log*
+yarn-error.log*
 logs/
 backend/logs/
+*.pem
+*.key
+
+# Docker
+qdrant_data/
+.docker/

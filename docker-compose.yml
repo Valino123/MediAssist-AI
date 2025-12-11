@@ -1,0 +1,33 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    ports:
+      - "6333:6333"
+    environment:
+      QDRANT__SERVICE__API_KEY: dev-qdrant-key
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: docker-mediassit-v2
+    container_name: mediassist-backend
+    depends_on:
+      - qdrant
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8000
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      QDRANT_USE_SSL: "False"
+      QDRANT_API_KEY: dev-qdrant-key
+    ports:
+      - "8000:8000"
+    # If using a venv/requirements baked into the image, ensure the Dockerfile handles it.
+
+volumes:
+  qdrant_data:
+
