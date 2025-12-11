@@ -1,7 +1,6 @@
 import os 
 import logging 
 import numpy as np 
-import cv2 
 from PIL import Image 
 import torch 
 import torch.nn as nn 

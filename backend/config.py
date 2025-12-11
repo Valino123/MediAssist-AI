@@ -100,7 +100,7 @@ class Config:
         # Security and Validation settings
         self.RATE_LIMIT_PER_MINUTE=int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
         self.MAX_MESSAGE_LENGTH=int(os.getenv("MAX_MESSAGE_LENGTH", "2000"))
-        self.MAX_FILE_SIZE=int(os.getenv("MAX_FILE_SIZE", "5242880"))
+        # MAX_FILE_SIZE already set in upload settings (bytes); do not override here
         self.ENABLE_PROFANITY_FILTER=os.getenv("ENABLE_PROFANITY_FILTER", "True").lower() == "true"
         self.ENABLE_CONTENT_VALIDATION=os.getenv("ENABLE_CONTENT_VALIDATION", "True").lower() == "true"
         self.ENABLE_RATE_LIMITING=os.getenv("ENABLE_RATE_LIMITING", "True").lower() == "true"

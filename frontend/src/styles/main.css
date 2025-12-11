@@ -640,3 +640,134 @@ body {
 .validation-buttons .btn {
     margin-right: 10px;
 }
+
+/* React SPA additions */
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.status-text {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.chat-body {
+    position: relative;
+}
+
+.message .message-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.tts-btn {
+    border: none;
+    background: rgba(31,41,55,0.06);
+    border-radius: 10px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.tts-btn:hover {
+    background: rgba(31,41,55,0.12);
+}
+
+.input-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 10px 12px;
+    box-shadow: var(--shadow-light);
+}
+
+.icon-button {
+    border: 1px solid var(--border-color);
+    background: #f8fafc;
+    border-radius: 10px;
+    width: 42px;
+    height: 42px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.icon-button.active {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.text-input {
+    flex: 1;
+    border: none;
+    outline: none;
+    font-size: 14px;
+    padding: 8px 10px;
+    background: transparent;
+}
+
+.send-button {
+    border: none;
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    color: #fff;
+    padding: 10px 16px;
+    border-radius: 12px;
+    cursor: pointer;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+}
+
+.send-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.image-preview {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 10px 12px;
+}
+
+.img-preview {
+    max-height: 100px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+}
+
+.image-preview-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.remove-image {
+    border: none;
+    background: #fee2e2;
+    color: #b91c1c;
+    padding: 6px 10px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.footer-info {
+    text-align: center;
+    margin-top: 10px;
+    color: var(--text-secondary);
+}

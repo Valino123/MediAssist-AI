@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+.venv/
+venv/
+*.py[cod]
+*.egg-info/
+
+# API keys
+.env
+.env.*
+*.env
+
+# Unit test / coverage reports
+.cache
+coverage/
+*.coverage
+
+# IDEs and editors
+.vscode/
+.idea/
+
+# Logs and databases
+logs/
+data/
+*.log
+
+# App data and artifacts
+uploads/
+models/
+cache/
+
+# Feature guide files (commented out to keep documentation in repo)
+# *_GUIDE.md
+
+

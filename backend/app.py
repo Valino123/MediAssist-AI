@@ -1,15 +1,15 @@
 import os
 import uuid
 import logging
+from pathlib import Path
 from datetime import datetime
 from typing import Optional, List
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles 
-from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 import uvicorn
 from config import config, logger
@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI):
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="Medical Assistant - Part 1",
+    title="Medical Assistant - V1.1",
     description="Basic FastAPI setup with file upload and chat endpoints",
     version="1.0.0",
     docs_url="/docs",
@@ -66,11 +66,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Set up template (for later parts)
-templates = Jinja2Templates(directory="templates")
+# Resolve project paths (backend folder is one level below project root)
+BASE_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = BASE_DIR.parent
+FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
+FRONTEND_ASSETS = FRONTEND_DIST / "assets"
 
-# Add static files mounting for CSS, JS, and other assets
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Mount built frontend assets when available
+if FRONTEND_ASSETS.exists():
+    app.mount("/assets", StaticFiles(directory=str(FRONTEND_ASSETS)), name="assets")
+    app.mount("/static", StaticFiles(directory=str(FRONTEND_DIST)), name="static")
+else:
+    logger.warning("Frontend dist assets not found. Run `npm run build` in frontend/ for production.")
 
 # Add exception handler for validation errors
 @app.exception_handler(RequestValidationError)
@@ -112,10 +119,20 @@ class HealthResponse(BaseModel):
     uptime: str
 
 # Routes
-@app.get("/", response_class=HTMLResponse)  
-async def read_root(request: Request):
-    """Serve the main page"""
-    return templates.TemplateResponse("index.html", {"request": request})
+@app.get("/", response_class=HTMLResponse)
+async def read_root():
+    """Serve the built SPA index or a fallback message."""
+    index_path = FRONTEND_DIST / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
+    return HTMLResponse(
+        content=(
+            "<h3>MediAssist backend is running.</h3>"
+            "<p>Build the frontend to serve UI: "
+            "<code>cd frontend && npm install && npm run build</code>.</p>"
+        ),
+        status_code=200,
+    )
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
