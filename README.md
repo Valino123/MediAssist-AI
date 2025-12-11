@@ -33,6 +33,28 @@ MediAssist AI is a multi-agent medical assistant system that combines various AI
 - **Medical Disclaimers**: Automatic medical advice disclaimers
 - **Security Checks**: XSS, SQL injection, and other security threat detection
 
+## 🏗️ Multi-Agent Orchestration Architecture
+
+The system uses a LangGraph-based workflow to intelligently route queries to specialized agents. The orchestrator processes inputs through multiple stages including validation, agent selection, execution, and output safety checks.
+
+![App Screenshot](./docs/images/diagram.png)
+
+### Workflow Stages
+
+1. **Input Processing**: Analyzes input for images and validates content
+2. **Agent Decision**: LLM-based intelligent routing to appropriate agent
+3. **Agent Execution**: Specialized agents process the query
+4. **Confidence Routing**: RAG results are evaluated; low confidence triggers web search fallback
+5. **Medical Image Routing**: Multimodal LLM routes medical images to specialized analysis agents
+6. **Output Safety**: Content filtering and medical disclaimers applied before response
+
+### Routing Logic
+
+- **Text Queries**: Routed to Conversation, RAG, or Web Search agents based on query type
+- **Medical Images**: Routed through multimodal LLM to specialized image analysis agents
+- **Confidence Fallback**: Low RAG confidence automatically triggers web search for additional information
+- **Safety First**: All inputs and outputs pass through guardrails and validation layers
+
 ## 🛠️ Technology Stack
 
 - **Backend**: FastAPI, Python 3.8+
@@ -44,7 +66,7 @@ MediAssist AI is a multi-agent medical assistant system that combines various AI
   - Qdrant for vector storage
 - **Voice Processing**: Azure Cognitive Services
 - **Web Search**: Google Custom Search API, PubMed API
-- **Frontend**: HTML5, Bootstrap 5, JavaScript
+- **Frontend**: React + Vite (TypeScript), CSS (Inter)
 - **Database**: SQLite (Qdrant), File-based storage
 
 ## 📋 Prerequisites
@@ -118,6 +140,23 @@ MediAssist AI is a multi-agent medical assistant system that combines various AI
    python app.py
    ```
 
+## 🎨 Frontend (React + Vite)
+
+- `cd frontend && npm install`
+- Dev: `npm run dev` (serves on http://localhost:5173 and proxies API calls to http://localhost:8000)
+- Env (optional): set `VITE_API_BASE=http://localhost:8000` if you bypass the proxy
+- Build: `npm run build` (outputs to `frontend/dist`, served by FastAPI in production)
+
+## ▶️ Running the app
+
+### Development (split ports)
+1. Terminal A: `bash backend/scripts/run_backend_dev.sh` (FastAPI on :8000 with reload)
+2. Terminal B: `cd frontend && npm run dev` (Vite on :5173)
+
+### Production (backend serves built frontend)
+1. `bash backend/scripts/run_prod.sh` (builds Vite and starts uvicorn on :8000)
+2. Open http://localhost:8000
+
 ## 🎯 Usage
 
 ### Web Interface
@@ -159,30 +198,26 @@ MediAssist AI is a multi-agent medical assistant system that combines various AI
 ## 🏗️ Project Structure
 
 ```
-MediAssist-AI/
-├── agents/                          # AI agent modules
-│   ├── agent_decision.py           # Agent routing logic
-│   ├── multi_agent_orchestrator.py # Main orchestration system
-│   ├── simple_chat_agent/          # Conversational AI
-│   ├── rag_agent/                  # Knowledge retrieval
-│   ├── web_search_agent/           # Web search capabilities
-│   ├── image_analysis_agent/       # Medical image analysis
-│   ├── voice_processor/            # Speech processing
-│   ├── guardrails/                 # Content safety
-│   └── validation/                 # Input validation
-├── static/                         # Frontend assets
-├── templates/                      # HTML templates
-├── data/                          # Data storage
-│   ├── qdrant_db/                 # Vector database
-│   ├── docs_db/                   # Document storage
-│   └── parsed_docs/               # Processed documents
-├── uploads/                       # File uploads
-├── logs/                          # Application logs
-├── models/                        # AI model storage
-├── tests/                         # Test files and data
-├── app.py                         # Main FastAPI application
-├── config.py                      # Configuration management
-└── .gitignore                     # Git ignore rules
+MediAssist/
+├── backend/                      # FastAPI backend
+│   ├── agents/                   # Multi-agent modules
+│   ├── scripts/                  # Dev/prod helper scripts
+│   ├── app.py                    # Main FastAPI application
+│   ├── config.py                 # Configuration management
+│   └── requirements.txt
+├── frontend/                     # React + Vite SPA
+│   ├── src/                      # React components/styles
+│   ├── public/                   # Static assets (favicon, etc.)
+│   └── dist/                     # Built assets served by FastAPI
+├── data/                         # Data storage
+│   ├── qdrant_db/                # Vector database
+│   ├── docs_db/                  # Document storage
+│   └── parsed_docs/              # Processed documents
+├── uploads/                      # File uploads
+├── logs/                         # Application logs
+├── models/                       # AI model storage
+├── tests/                        # Test files and data
+└── docs/                         # Documentation and diagrams
 ```
 
 ## 🔒 Security Features

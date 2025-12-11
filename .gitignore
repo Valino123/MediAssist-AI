@@ -1,27 +1,31 @@
+# OS/filesystem
+.DS_Store
+Thumbs.db
+
 # Python
 __pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+backend/.venv/
+venv/
 
-# API keys
+# Environment / secrets
 .env
+.env.*
+*.env
 
-# Unit test / coverage reports
-.cache
+# Node / frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
 
-# IDEs and editors
-.vscode/
-
-# Logs and databases
+# Builds / coverage / logs
+dist/
+build/
+coverage/
+*.coverage
+*.log
 logs/
-data/docs_db/
-parsed_docs/
-qdrant_db/
-
-# App data and artifacts
-uploads/
-models/
-cache/
-
-# Feature guide files (commented out to keep documentation in repo)
-# *_GUIDE.md
-
-
+backend/logs/
