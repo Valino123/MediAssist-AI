@@ -24,7 +24,10 @@ test-results/
 
 # Runtime data (local vector DB, models, uploads)
 logs/
-data/
+# Ignore runtime data/ directory, but keep tests/data/ for test fixtures
+/data/
 models/
 uploads/
 cache/
+# Explicitly allow test data
+!tests/data/
