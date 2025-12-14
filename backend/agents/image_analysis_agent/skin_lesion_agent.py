@@ -1,5 +1,6 @@
 import base64
 import io
+import os
 import torch
 from PIL import Image
 from datetime import datetime
@@ -8,7 +9,7 @@ from typing import Dict, Any
 # Key imports from Hugging Face
 from transformers import AutoImageProcessor, AutoModelForImageClassification
 
-from config import logger
+from config import config, logger
 # We still import ImageClassifier to maintain the class inheritance structure
 from .image_classifier import ImageClassifier
 
@@ -23,15 +24,28 @@ class SkinLesionAgent(ImageClassifier):
         self.load_model()
 
     def load_model(self):
-        """Load the ViT model and processor from Hugging Face."""
+        """Load the ViT model and processor from Hugging Face.
+
+        We cache all model assets under models/skin_lesion for reuse.
+        """
         try:
             logger.info(f"Loading model '{self.model_name}' from Hugging Face...")
             
+            model_cache_dir = os.path.join(config.MODELS_PATH, "skin_lesion")
+            os.makedirs(model_cache_dir, exist_ok=True)
+
             # This processor knows how to correctly resize, normalize, and prepare images for the model
-            self.processor = AutoImageProcessor.from_pretrained(self.model_name, use_fast=True)
+            self.processor = AutoImageProcessor.from_pretrained(
+                self.model_name,
+                use_fast=True,
+                cache_dir=model_cache_dir,
+            )
             
             # This is the Vision Transformer model with its pre-trained weights
-            self.model = AutoModelForImageClassification.from_pretrained(self.model_name)
+            self.model = AutoModelForImageClassification.from_pretrained(
+                self.model_name,
+                cache_dir=model_cache_dir,
+            )
 
             self.model.to(self.device)
             self.model.eval() # Set the model to evaluation mode

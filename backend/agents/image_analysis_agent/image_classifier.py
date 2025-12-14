@@ -25,8 +25,8 @@ class ImageClassifier:
         """Preprocess image for model input"""
         try:
             # Decode base64 image
-            if image_data.startwith('data:image'):
-                image_data = image_data.split(',')[1] 
+            if image_data.startswith('data:image'):
+                image_data = image_data.split(',')[1]
 
             image_bytes = base64.b64decode(image_data)
             image = Image.open(io.BytesIO(image_bytes)) 

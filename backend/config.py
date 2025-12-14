@@ -44,10 +44,14 @@ class Config:
             "You are a helpful medical assistant. Provide accurate, helpful information about health and medical topics. Always remind users to consult healthcare professionals for serious medical concerns."
         )
 
-        # RAG settings
-        self.VECTOR_DB_PATH=os.getenv("VECTOR_DB_PATH")
-        self.DOCS_DB_PATH=os.getenv("DOCS_DB_PATH")
-        self.PARSED_DOCS_PATH=os.getenv("PARSED_DOCS_PATH")
+        # RAG settings and vector DB
+        self.VECTOR_DB_PATH=os.getenv("VECTOR_DB_PATH", "data/qdrant_db")
+        self.DOCS_DB_PATH=os.getenv("DOCS_DB_PATH", "data/docs_db")
+        self.PARSED_DOCS_PATH=os.getenv("PARSED_DOCS_PATH", "data/parsed_docs")
+        self.QDRANT_HOST=os.getenv("QDRANT_HOST")  # If set, use remote Qdrant instead of local path
+        self.QDRANT_PORT=int(os.getenv("QDRANT_PORT", "6333"))
+        self.QDRANT_USE_SSL=os.getenv("QDRANT_USE_SSL", "False").lower() == "true"
+        self.QDRANT_API_KEY=os.getenv("QDRANT_API_KEY")
         self.CHUNK_SIZE=int(os.getenv("CHUNK_SIZE", "512"))
         self.CHUNK_OVERLAP=int(os.getenv("CHUNK_OVERLAP", "50"))
         self.MAX_RETRIEVAL_DOCS=int(os.getenv("MAX_RETRIEVAL_DOCS", "5"))
@@ -117,16 +121,18 @@ class Config:
     def _create_directories(self):
         """Create necessary directories"""
         directories = [
-            self.UPLOAD_FOLDER, 
+            self.UPLOAD_FOLDER,
             os.path.join(self.UPLOAD_FOLDER, "frontend"),
             os.path.join(self.UPLOAD_FOLDER, "backend"),
             os.path.join(self.UPLOAD_FOLDER, "speech"),
-            self.VECTOR_DB_PATH,
             self.DOCS_DB_PATH,
             self.PARSED_DOCS_PATH,
             self.MODELS_PATH,
             "logs"
         ]
+        # Only create local vector DB path when using embedded Qdrant
+        if not self.QDRANT_HOST and self.VECTOR_DB_PATH:
+            directories.append(self.VECTOR_DB_PATH)
         for directory in directories:
             os.makedirs(directory, exist_ok=True)
 

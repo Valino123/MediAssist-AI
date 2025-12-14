@@ -1,0 +1,62 @@
+name: Backend CI
+
+on:
+  push:
+    # Run tests when pushing to main or your active feature branches
+    branches: [ main, decouple, memory-mechanism ]
+  pull_request:
+    # Run tests on PRs targeting main before merge
+    branches: [ main ]
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+
+    env:
+      # Ensure Python can import the backend package
+      PYTHONPATH: ./backend
+      # Mock LLM config values (tests will mock actual LLM calls)
+      QWEN_MODEL: "gpt-3.5-turbo"
+      BASE_URL: "https://api.openai.com/v1"
+      AGENT_DECISION_MODEL: "gpt-3.5-turbo"
+      # Empty API keys to prevent accidental external calls
+      DASHSCOPE_API_KEY: ""
+      EMBEDDING_API_KEY: ""
+      EMBEDDING_DEPLOYMENT: ""
+      EMBEDDING_MODEL: ""
+      EMBEDDING_API_VERSION: ""
+      EMBEDDING_AZURE_ENDPOINT: ""
+      AZURE_SPEECH_KEY: ""
+      GOOGLE_API_KEY: ""
+      GOOGLE_CSE_ID: ""
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run backend tests
+        working-directory: backend
+        run: |
+          bash scripts/run_tests.sh
+
+

@@ -1,35 +1,33 @@
 # Python
 __pycache__/
+.pytest_cache/
+.mypy_cache/
 .venv/
 venv/
 *.py[cod]
 *.egg-info/
 
-# API keys
+# Environment / secrets
 .env
 .env.*
 *.env
 
-# Unit test / coverage reports
+# Test artifacts
 .cache
 coverage/
 *.coverage
+test-results/
 
-# IDEs and editors
+# IDEs
 .vscode/
 .idea/
 
-# Logs and databases
+# Runtime data (local vector DB, models, uploads)
 logs/
-data/
-*.log
-
-# App data and artifacts
-uploads/
+# Ignore runtime data/ directory, but keep tests/data/ for test fixtures
+/data/
 models/
+uploads/
 cache/
-
-# Feature guide files (commented out to keep documentation in repo)
-# *_GUIDE.md
-
-
+# Explicitly allow test data
+!tests/data/

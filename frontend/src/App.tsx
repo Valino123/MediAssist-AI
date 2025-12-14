@@ -1,4 +1,4 @@
-import { FormEvent, useRef, useState } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 
 type Sender = 'user' | 'assistant';
 

@@ -76,12 +76,32 @@ class VectorStore:
         # Prevent re-initialization
         if self._initialized:
             return
-            
+
         try:
-            # Initialize Qdrant client with connection management
-            self.client = QdrantClient(path=config.VECTOR_DB_PATH)
+            # Decide operating mode based on connection configuration.
+            # Mode 1: external Qdrant service when host is configured.
+            # Mode 2: local on-disk / in-memory index when no host is provided.
+            self.use_external_vector_db = bool(config.QDRANT_HOST)
+
+            if self.use_external_vector_db:
+                scheme = "https" if config.QDRANT_USE_SSL else "http"
+                url = f"{scheme}://{config.QDRANT_HOST}:{config.QDRANT_PORT}"
+                self.client = QdrantClient(url=url, api_key=config.QDRANT_API_KEY)
+                logger.info(f"Qdrant client initialized (remote) at {url}")
+            else:
+                # Local mode: Qdrant client backed by a local path. We still write
+                # points to disk for persistence, but searches can fall back to an
+                # in-process index so tests and dev do not depend on server-side
+                # search APIs being available.
+                # Ensure the directory exists before initializing Qdrant client
+                os.makedirs(config.VECTOR_DB_PATH, exist_ok=True)
+                self.client = QdrantClient(path=config.VECTOR_DB_PATH)
+                logger.info(
+                    f"Qdrant client initialized (local path) at {config.VECTOR_DB_PATH}"
+                )
+
             self.collection_name = "medical_documents"
-            
+
             # Initialize embedding model
             # self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
             self.embedding_model = AzureTextEmbeddingModel()
@@ -93,18 +113,27 @@ class VectorStore:
             else:
                 self.bm25_retriever = None
                 self.document_texts = []
-                logger.warning("BM25Retriever not available, hybrid search will use dense search only")
+                logger.warning(
+                    "BM25Retriever not available, hybrid search will use dense search only"
+                )
+
+            # Lightweight local in-memory index for environments where we don't
+            # have a full Qdrant search API (e.g., CI, simple local dev).
+            # Each entry mirrors the document dict passed to add_documents.
+            self.local_documents: List[Dict[str, Any]] = []
 
             # Create collection if it doesn't exist
             self._create_collection()
-            
+
             self._initialized = True
-            logger.info("VectorStore initialized (singleton) with hybrid retrieval support")
-            
+            logger.info(
+                "VectorStore initialized (singleton) with hybrid retrieval support"
+            )
+
         except Exception as e:
             logger.error(f"Failed to initialize VectorStore: {str(e)}")
             # Clean up on failure
-            if hasattr(self, 'client') and self.client:
+            if hasattr(self, "client") and self.client:
                 self.client = None
             raise
     
@@ -170,10 +199,11 @@ class VectorStore:
             # Also add to BM25 retriever if available
             if self.bm25_retriever is not None:
                 self.bm25_retriever.add_documents(documents)
-            
-            # Store texts for hybrid retrieval
+
+            # Store texts for hybrid retrieval and local fallback index
             for doc in documents:
                 self.document_texts.append(doc["text"])
+                self.local_documents.append(doc)
 
             logger.info(f"Added {len(points)} documents to vector store and BM25 index")
             return True
@@ -183,38 +213,108 @@ class VectorStore:
             return False
 
     def search_similar(self, query: str, limit: int = None) -> List[Dict[str, Any]]:
-        """Search for similar documents using dense embeddings only"""
+        """Search for similar documents using dense embeddings only.
+
+        - Remote mode: use Qdrant's server-side search API when available.
+        - Local mode: fall back to an in-process index built from added documents.
+        """
         if limit is None:
-            limit = config.MAX_RETRIEVAL_DOCS 
-        
-        try:
-            # Generate query embedding
-            query_embedding = self.generate_embeddings([query])[0]
+            limit = config.MAX_RETRIEVAL_DOCS
 
-            # Search in collection
-            search_results = self.client.search(
-                collection_name=self.collection_name,
-                query_vector=query_embedding,
-                limit=limit,
+        # Prefer server-side search when we are explicitly configured for a remote
+        # vector DB and the client exposes a search API.
+        if self.use_external_vector_db and hasattr(self.client, "search"):
+            try:
+                # Generate query embedding
+                query_embedding = self.generate_embeddings([query])[0]
+
+                # Search in collection
+                search_results = self.client.search(
+                    collection_name=self.collection_name,
+                    query_vector=query_embedding,
+                    limit=limit,
+                )
+
+                # Format results
+                results: List[Dict[str, Any]] = []
+                for result in search_results:
+                    results.append(
+                        {
+                            "text": result.payload["text"],
+                            "doc_id": result.payload["doc_id"],
+                            "chunk_index": result.payload["chunk_index"],
+                            "score": result.score,
+                            "metadata": result.payload["metadata"],
+                            "retrieval_method": "dense",
+                        }
+                    )
+                    logger.info(
+                        f"Document {result.payload['doc_id']} found with score {result.score}"
+                    )
+                logger.info(
+                    f"Found {len(results)} similar documents for query: {query[:50]}..."
+                )
+                return results
+
+            except Exception as e:
+                logger.error(f"Error searching vector store: {str(e)}")
+                # fall through to local-mode search as a safety net
+
+        # Local / fallback mode: simple in-memory cosine similarity over the
+        # documents we've ingested during this process.
+        if not self.local_documents:
+            logger.warning(
+                "Local vector index is empty; no documents available for search"
             )
+            return []
 
-            # Format results
-            results = []
-            for result in search_results:
-                results.append({
-                    "text": result.payload["text"],
-                    "doc_id": result.payload["doc_id"],
-                    "chunk_index": result.payload["chunk_index"],
-                    "score": result.score,
-                    "metadata": result.payload["metadata"],
-                    "retrieval_method": "dense"
-                })
-                logger.info(f"Document {result.payload['doc_id']} found with score {result.score}")
-            logger.info(f"Found {len(results)} similar documents for query: {query[:50]}...")
+        try:
+            # Compute embeddings for query and documents
+            query_embedding = np.array(self.generate_embeddings([query])[0])
+            doc_texts = [d["text"] for d in self.local_documents]
+            doc_embeddings = np.array(self.generate_embeddings(doc_texts))
+
+            # Normalize vectors to compute cosine similarity
+            def _normalize(v: np.ndarray) -> np.ndarray:
+                norm = np.linalg.norm(v, axis=-1, keepdims=True)
+                norm[norm == 0] = 1.0
+                return v / norm
+
+            q_norm = _normalize(query_embedding)
+            d_norm = _normalize(doc_embeddings)
+
+            # Cosine similarity scores
+            scores = d_norm @ q_norm
+
+            # Take top-k indices
+            top_k = min(limit, len(self.local_documents))
+            top_indices = np.argsort(scores)[-top_k:][::-1]
+
+            results: List[Dict[str, Any]] = []
+            for idx in top_indices:
+                doc = self.local_documents[int(idx)]
+                score = float(scores[int(idx)])
+                results.append(
+                    {
+                        "text": doc["text"],
+                        "doc_id": doc.get("doc_id", "local_doc"),
+                        "chunk_index": doc.get("chunk_index", 0),
+                        "score": score,
+                        "metadata": doc.get("metadata", {}),
+                        "retrieval_method": "dense",
+                    }
+                )
+                logger.info(
+                    f"Local search: document {results[-1]['doc_id']} score={score:.4f}"
+                )
+
+            logger.info(
+                f"Local dense search returned {len(results)} documents for query: {query[:50]}..."
+            )
             return results
 
         except Exception as e:
-            logger.error(f"Error searching vector store: {str(e)}")
+            logger.error(f"Error in local dense search: {str(e)}")
             return []
 
     def hybrid_search(self, query: str, limit: int = None, alpha: float = 0.7) -> List[Dict[str, Any]]:
@@ -324,6 +424,7 @@ class VectorStore:
             if self.bm25_retriever is not None:
                 self.bm25_retriever.clear()
             self.document_texts = []
+            self.local_documents = []
             
             logger.info("Collection and BM25 index cleared and recreated")
             return True

@@ -1,14 +1,13 @@
 """
-Guardrails Package
-Handles safety checks, content filtering, and medical disclaimers
+Guardrails module exports
+Policy enforcement: medical boundaries, emergencies, content policy
 """
-
-from .local_guardrails import LocalGuardrails
+from .medical_guardrails import MedicalGuardrails
 from .content_filter import ContentFilter
 from .medical_disclaimer import MedicalDisclaimer
 
 __all__ = [
-    'LocalGuardrails',
+    'MedicalGuardrails',
     'ContentFilter',
     'MedicalDisclaimer'
 ]
