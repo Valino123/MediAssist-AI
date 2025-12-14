@@ -1,9 +1,18 @@
-from .input_validator import InputValidator
+"""
+Validation module exports
+Technical input validation: security, format, PII, spam
+"""
+from .input_validator import InputValidator, InputValidationResult
+from .security_validator import SecurityValidator
+from .pii_validator import PIIValidator
+from .spam_validator import SpamValidator
 from .content_sanitizer import ContentSanitizer
-from .security_checker import SecurityChecker
 
 __all__ = [
     'InputValidator',
-    'ContentSanitizer',
-    'SecurityChecker'
+    'InputValidationResult',
+    'SecurityValidator',
+    'PIIValidator',
+    'SpamValidator',
+    'ContentSanitizer'
 ]

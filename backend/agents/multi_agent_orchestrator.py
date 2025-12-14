@@ -9,26 +9,41 @@ from langgraph.graph import StateGraph, END
 from config import config, logger
 from .agent_decision import AgentDecisionSystem, AgentState 
 from .simple_chat_agent import chat_agent
-from .rag_agent import rag_agent 
+# Import the lazily-initialized global RAG agent instance from the concrete module,
+# not the rag_agent package, to avoid package/module name collisions.
+from .rag_agent.rag_agent import rag_agent 
 # Use global medical agents defined in their modules
 from .image_analysis_agent.brain_tumor_agent import BrainTumorAgent as _BTClass  # type: ignore
 from .image_analysis_agent.chest_xray_agent import ChestXrayAgent as _CXClass  # type: ignore
 from .image_analysis_agent.skin_lesion_agent import SkinLesionAgent as _SLClass  # type: ignore
 from .web_search_agent import WebSearchAgent
-from .guardrails import LocalGuardrails, ContentFilter
-from .validation import InputValidator
+from .validation import (
+    InputValidator,
+    SecurityValidator,
+    PIIValidator,
+    SpamValidator,
+    ContentSanitizer
+)
+from .guardrails import MedicalGuardrails, ContentFilter
 
 class MultiAgentOrchestrator: 
 
     def __init__(self):
         """Initialize the multi-agent orchestrator"""
         self.agent_decision_system = AgentDecisionSystem()
-        # self.memory = MemorySaver()
         
-        # Initialize lightweight/shared helpers
-        self.guardrails = LocalGuardrails()
+        # Validation layer - Technical checks
+        self.input_validator = InputValidator()
+        self.security_validator = SecurityValidator()
+        self.pii_validator = PIIValidator()
+        self.spam_validator = SpamValidator()
+        self.content_sanitizer = ContentSanitizer()
+        
+        # Guardrails layer - Policy enforcement
+        self.medical_guardrails = MedicalGuardrails()
         self.content_filter = ContentFilter()
-        self.validator = InputValidator()
+        
+        # Other agents
         self.web_search = WebSearchAgent()
 
         # Initialize medical image analysis agents (singletons per process)

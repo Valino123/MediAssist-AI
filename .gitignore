@@ -1,22 +1,18 @@
-# OS/filesystem
+# OS files
 .DS_Store
 Thumbs.db
-tests
-
-# Python
-__pycache__/
-/.pytest_cache/
-/.mypy_cache/
-*.py[cod]
-*.egg-info/
-.venv/
-backend/.venv/
-venv/
 
 # Environment / secrets
 .env
 .env.*
 *.env
+*.pem
+*.key
+
+# Python (root level only - backend/.gitignore handles backend specifics)
+__pycache__/
+*.py[cod]
+*.egg-info/
 
 # Node / frontend
 node_modules/
@@ -24,18 +20,17 @@ frontend/node_modules/
 frontend/dist/
 frontend/.vite/
 
-# Builds / coverage / logs
+# Builds / coverage
 dist/
 build/
 coverage/
 *.coverage
+
+# Logs
 *.log
 npm-debug.log*
 yarn-error.log*
 logs/
-backend/logs/
-*.pem
-*.key
 
 # Docker
 qdrant_data/

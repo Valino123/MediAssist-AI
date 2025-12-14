@@ -17,7 +17,11 @@ from agents.simple_chat_agent import chat_agent
 from agents.rag_agent import rag_agent
 from agents.multi_agent_orchestrator import multi_agent_orchestrator
 from agents.voice_processor.voice_agent import VoiceAgent
-from agents.rag_agent import vector_store, init_global_vector_store, close_global_vector_store
+from agents.rag_agent.vector_store import (
+    vector_store,
+    init_global_vector_store,
+    close_global_vector_store,
+)
 
 # Track app start time
 app_start_time = datetime.now()

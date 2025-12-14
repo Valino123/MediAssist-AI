@@ -1,4 +1,6 @@
 import logging
+import os
+import json
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from langchain_openai import ChatOpenAI
@@ -206,6 +208,14 @@ class RAGAgent:
             if documents:
                 query_expanded = documents[0].get("query_expanded", False)
                 reranked = documents[0].get("reranked", False)
+            else:
+                # Even if no documents are ultimately returned, we still want the
+                # response metadata to reflect which retrieval features were
+                # active for this query (useful for tests and monitoring).
+                if use_query_expansion is None:
+                    query_expanded = bool(config.ENABLE_QUERY_EXPANSION)
+                else:
+                    query_expanded = bool(use_query_expansion)
 
             return {
                 "status": "success",
@@ -245,6 +255,45 @@ class RAGAgent:
             if not result["success"]:
                 return result
             
+            # In local vector DB mode, persist raw and parsed docs under data/*
+            if not config.QDRANT_HOST:
+                try:
+                    os.makedirs(config.DOCS_DB_PATH, exist_ok=True)
+                    os.makedirs(config.PARSED_DOCS_PATH, exist_ok=True)
+
+                    # Copy raw document into docs DB path for traceability
+                    if os.path.isfile(file_path):
+                        raw_dest = os.path.join(
+                            config.DOCS_DB_PATH, os.path.basename(file_path)
+                        )
+                        if not os.path.exists(raw_dest):
+                            try:
+                                # Use binary copy preserving metadata when possible
+                                import shutil  # local import to avoid unused at module level
+
+                                shutil.copy2(file_path, raw_dest)
+                            except Exception as copy_err:
+                                logger.warning(
+                                    f"Failed to copy raw document to docs DB path: {copy_err}"
+                                )
+
+                    # Persist parsed chunks and metadata as JSON for offline inspection
+                    parsed_payload = {
+                        "doc_id": result["metadata"]["doc_id"],
+                        "source_path": os.path.abspath(file_path),
+                        "chunks": result["chunks"],
+                        "metadata": result["metadata"],
+                    }
+                    base_name, _ = os.path.splitext(os.path.basename(file_path))
+                    parsed_dest = os.path.join(config.PARSED_DOCS_PATH, base_name + ".json")
+                    with open(parsed_dest, "w", encoding="utf-8") as f:
+                        json.dump(parsed_payload, f, ensure_ascii=False, indent=2)
+                except Exception as persist_err:
+                    # Do not fail ingestion if local persistence fails; just log.
+                    logger.warning(
+                        f"Failed to persist local RAG document artifacts: {persist_err}"
+                    )
+
             # Prepare documents for vector store
             documents = []
             for i, chunk in enumerate(result["chunks"]):
@@ -296,6 +345,21 @@ class RAGAgent:
                 "error": str(e)
             }
 
-# Global RAG agent instance
-rag_agent = RAGAgent()
+# Global RAG agent instance - initialized lazily to avoid circular imports at module load time
+_rag_agent_instance = None
+
+def _get_rag_agent():
+    """Get or create the global RAG agent instance."""
+    global _rag_agent_instance
+    if _rag_agent_instance is None:
+        _rag_agent_instance = RAGAgent()
+    return _rag_agent_instance
+
+# Module-level attribute that will be accessed like: from ... import rag_agent; rag_agent.method()
+class _RAGAgentProxy:
+    """Proxy to delay instantiation of RAG agent until first access."""
+    def __getattr__(self, name):
+        return getattr(_get_rag_agent(), name)
+
+rag_agent = _RAGAgentProxy()
 

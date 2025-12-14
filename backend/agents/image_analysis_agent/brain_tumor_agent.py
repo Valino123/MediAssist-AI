@@ -1,5 +1,6 @@
 import base64
 import io
+import os
 import torch
 from PIL import Image
 from datetime import datetime
@@ -8,7 +9,7 @@ from typing import Dict, Any
 # Key imports from Hugging Face
 from transformers import AutoImageProcessor, AutoModelForImageClassification
 
-from config import logger
+from config import config, logger
 from .image_classifier import ImageClassifier # Assuming your base class is here
 
 class BrainTumorAgent(ImageClassifier):
@@ -23,14 +24,30 @@ class BrainTumorAgent(ImageClassifier):
         # The class names are now loaded directly from the model's configuration
 
     def load_model(self):
-        """Load the model and processor from Hugging Face."""
+        """Load the model and processor from Hugging Face.
+
+        We explicitly cache weights under the configured models/ directory so that
+        the first download is reused across runs and environments.
+        """
         try:
             logger.info(f"Loading model '{self.model_name}' from Hugging Face...")
+
+            # Ensure a dedicated cache directory for this model under models/
+            model_cache_dir = os.path.join(config.MODELS_PATH, "brain_tumor")
+            os.makedirs(model_cache_dir, exist_ok=True)
+
             # The processor handles all the transformations (resize, normalize, etc.)
-            self.processor = AutoImageProcessor.from_pretrained(self.model_name, use_fast=True)
+            self.processor = AutoImageProcessor.from_pretrained(
+                self.model_name,
+                use_fast=True,
+                cache_dir=model_cache_dir,
+            )
             
             # The model is the neural network architecture with its pre-trained weights
-            self.model = AutoModelForImageClassification.from_pretrained(self.model_name)
+            self.model = AutoModelForImageClassification.from_pretrained(
+                self.model_name,
+                cache_dir=model_cache_dir,
+            )
 
             self.model.to(self.device)
             self.model.eval() # Set the model to evaluation mode
