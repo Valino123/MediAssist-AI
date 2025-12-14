@@ -45,6 +45,17 @@ def rag_agent_with_kb(monkeypatch):
     
     monkeypatch.setattr(vs_module.AzureTextEmbeddingModel, "encode", mock_encode)
     
+    # Mock query expander to return expanded queries (avoiding LLM API calls in CI)
+    from agents.rag_agent import query_expander as qe_module
+    
+    def mock_expand_query(query):
+        # Return a simple expanded version for testing
+        if "hypertension" in query.lower():
+            return f"{query} blood pressure cardiovascular"
+        return f"{query} medical health"
+    
+    monkeypatch.setattr(qe_module.query_expander, "expand_query", mock_expand_query)
+    
     # Properly close and reset the global vector store
     # Close the module-level cache and its client first
     if vs_module.vector_store is not None:
